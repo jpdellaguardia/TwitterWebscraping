@@ -205,6 +205,54 @@ class TwitterScraper:
             print("\nPressione Enter para fechar o navegador...")
             input()
             self.driver.quit()
+    
+    def scrape_portal_gui(self, portal_username, username, password, max_posts=30, max_comments=10, output_file="comments.csv", log_callback=None):
+        """Versão para interface gráfica"""
+        def log(msg):
+            if log_callback:
+                log_callback(msg)
+            else:
+                print(msg)
+        
+        try:
+            log("Fazendo login...")
+            self.login(username, password)
+            
+            profile_url = f"https://twitter.com/{portal_username}"
+            
+            log("Capturando posts...")
+            posts = self.get_posts(profile_url, max_posts)
+            log(f"Encontrados {len(posts)} posts")
+            
+            if not posts:
+                log("ERRO: Nenhum post encontrado!")
+                return
+            
+            all_comments = []
+            for i, post_url in enumerate(posts, 1):
+                log(f"Processando post {i}/{len(posts)}")
+                comments = self.get_comments(post_url)[:max_comments]
+                
+                for comment in comments:
+                    all_comments.append({
+                        'post_url': post_url,
+                        'comment': comment
+                    })
+                
+                time.sleep(1)
+            
+            with open(output_file, 'w', newline='', encoding='utf-8') as file:
+                writer = csv.DictWriter(file, fieldnames=['post_url', 'comment'])
+                writer.writeheader()
+                writer.writerows(all_comments)
+            
+            log(f"Capturados {len(all_comments)} comentários")
+            
+        except Exception as e:
+            log(f"ERRO: {e}")
+            raise
+        finally:
+            self.driver.quit()
 
 if __name__ == "__main__":
     # Configurações
