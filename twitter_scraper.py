@@ -97,15 +97,16 @@ class TwitterScraper:
         
         return list(posts)[:max_posts]
     
-    def get_comments(self, post_url):
-        """Captura comentários de uma postagem específica"""
-        print(f"Capturando comentários de: {post_url}")
+    def get_post_content_and_comments(self, post_url):
+        """Captura conteúdo do post e comentários"""
+        print(f"Capturando post e comentários de: {post_url}")
         
         # Remove /analytics da URL se existir
         clean_url = post_url.replace('/analytics', '')
         self.driver.get(clean_url)
         time.sleep(5)
         
+        post_content = ""
         comments = []
         
         # Scroll para carregar comentários
@@ -114,8 +115,7 @@ class TwitterScraper:
             time.sleep(3)
             print(f"Scroll {i+1}/3")
         
-        # Busca especificamente por replies/comentários
-        # Usa seletor mais específico para comentários reais
+        # Busca por containers de tweet
         comment_containers = self.driver.find_elements(By.XPATH, "//article[@data-testid='tweet']")
         print(f"Containers de tweet encontrados: {len(comment_containers)}")
         
@@ -128,8 +128,12 @@ class TwitterScraper:
                 is_original = any(clean_url.split('/')[-1] in link.get_attribute('href') for link in links)
                 
                 if is_original and not original_post_found:
+                    # Captura o conteúdo do post original
+                    text_elements = container.find_elements(By.XPATH, ".//div[@data-testid='tweetText']")
+                    if text_elements:
+                        post_content = text_elements[0].text.strip()
+                        print(f"Post original: {post_content[:50]}...")
                     original_post_found = True
-                    print("Post original encontrado, pulando...")
                     continue
                 
                 # Se não é o post original, é um comentário
@@ -147,8 +151,9 @@ class TwitterScraper:
                 print(f"Erro ao processar container: {e}")
                 continue
         
-        print(f"Total de comentários capturados: {len(comments)} (limitado a 10)")
-        return comments[:10]
+        print(f"Post: {len(post_content)} caracteres")
+        print(f"Total de comentários: {len(comments)} (limitado a 10)")
+        return post_content, comments[:10]
     
     def scrape_portal(self, portal_username, username, password, output_file="comments.csv"):
         """Função principal para capturar comentários"""
@@ -172,16 +177,17 @@ class TwitterScraper:
                 input("Pressione Enter para fechar...")
                 return
             
-            # Captura comentários
-            print("\n=== CAPTURANDO COMENTÁRIOS ===")
-            all_comments = []
+            # Captura posts e comentários
+            print("\n=== CAPTURANDO POSTS E COMENTÁRIOS ===")
+            all_data = []
             for i, post_url in enumerate(posts, 1):
                 print(f"\nProcessando post {i}/{len(posts)}")
-                comments = self.get_comments(post_url)
+                post_content, comments = self.get_post_content_and_comments(post_url)
                 
                 for comment in comments:
-                    all_comments.append({
+                    all_data.append({
                         'post_url': post_url,
+                        'post_content': post_content,
                         'comment': comment
                     })
                 
@@ -190,11 +196,11 @@ class TwitterScraper:
             # Salva em CSV
             print(f"\n=== SALVANDO RESULTADOS ===")
             with open(output_file, 'w', newline='', encoding='utf-8') as file:
-                writer = csv.DictWriter(file, fieldnames=['post_url', 'comment'])
+                writer = csv.DictWriter(file, fieldnames=['post_url', 'post_content', 'comment'])
                 writer.writeheader()
-                writer.writerows(all_comments)
+                writer.writerows(all_data)
             
-            print(f"\n✅ SUCESSO! Capturados {len(all_comments)} comentários")
+            print(f"\n✅ SUCESSO! Capturados {len(all_data)} registros (posts + comentários)")
             print(f"📁 Arquivo salvo: {output_file}")
             
         except Exception as e:
@@ -228,25 +234,27 @@ class TwitterScraper:
                 log("ERRO: Nenhum post encontrado!")
                 return
             
-            all_comments = []
+            all_data = []
             for i, post_url in enumerate(posts, 1):
                 log(f"Processando post {i}/{len(posts)}")
-                comments = self.get_comments(post_url)[:max_comments]
+                post_content, comments = self.get_post_content_and_comments(post_url)
+                comments = comments[:max_comments]
                 
                 for comment in comments:
-                    all_comments.append({
+                    all_data.append({
                         'post_url': post_url,
+                        'post_content': post_content,
                         'comment': comment
                     })
                 
                 time.sleep(1)
             
             with open(output_file, 'w', newline='', encoding='utf-8') as file:
-                writer = csv.DictWriter(file, fieldnames=['post_url', 'comment'])
+                writer = csv.DictWriter(file, fieldnames=['post_url', 'post_content', 'comment'])
                 writer.writeheader()
-                writer.writerows(all_comments)
+                writer.writerows(all_data)
             
-            log(f"Capturados {len(all_comments)} comentários")
+            log(f"Capturados {len(all_data)} registros (posts + comentários)")
             
         except Exception as e:
             log(f"ERRO: {e}")
